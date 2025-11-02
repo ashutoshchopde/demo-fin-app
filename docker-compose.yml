@@ -1,0 +1,179 @@
+version: '3.12'
+
+services:
+  # Infrastructure Services
+  postgres:
+    image: postgres:14
+    environment:
+      POSTGRES_USER: finflow
+      POSTGRES_PASSWORD: finflow123
+      POSTGRES_DB: finflow
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  mongodb:
+    image: mongo:6
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    environment:
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    ports:
+      - "9092:9092"
+    depends_on:
+      - zookeeper
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+    ports:
+      - "2181:2181"
+
+  # Module A: Auth Service
+  auth-service:
+    build: ./auth-service
+    ports:
+      - "8001:8001"
+    environment:
+      DATABASE_URL: postgresql://finflow:finflow123@postgres:5432/auth_db
+      REDIS_HOST: redis
+      SERVICE_PORT: 8001
+    depends_on:
+      - postgres
+      - redis
+
+  # Module B: Wallet Service
+  wallet-service:
+    build: ./wallet-service
+    ports:
+      - "8002:8002"
+    environment:
+      DATABASE_URL: postgresql://finflow:finflow123@postgres:5432/wallet_db
+      REDIS_HOST: redis
+      AUTH_SERVICE_URL: http://auth-service:8001
+      SERVICE_PORT: 8002
+    depends_on:
+      - postgres
+      - redis
+      - auth-service
+
+  # Module C: Payment Service
+  payment-service:
+    build: ./payment-service
+    ports:
+      - "8003:8003"
+    environment:
+      DATABASE_URL: postgresql://finflow:finflow123@postgres:5432/payment_db
+      REDIS_HOST: redis
+      AUTH_SERVICE_URL: http://auth-service:8001
+      WALLET_SERVICE_URL: http://wallet-service:8002
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SERVICE_PORT: 8003
+    depends_on:
+      - postgres
+      - redis
+      - kafka
+      - auth-service
+      - wallet-service
+
+  # Module D: Notification Service
+  notification-service:
+    build: ./notification-service
+    ports:
+      - "8004:8004"
+    environment:
+      DATABASE_URL: mongodb://mongodb:27017/notifications
+      REDIS_HOST: redis
+      AUTH_SERVICE_URL: http://auth-service:8001
+      PAYMENT_SERVICE_URL: http://payment-service:8003
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SERVICE_PORT: 8004
+    depends_on:
+      - mongodb
+      - redis
+      - kafka
+      - auth-service
+      - payment-service
+
+  # Module E: KYC/AML Service
+  kyc-service:
+    build: ./kyc-aml-service
+    ports:
+      - "8005:8005"
+    environment:
+      DATABASE_URL: postgresql://finflow:finflow123@postgres:5432/kyc_db
+      REDIS_HOST: redis
+      AUTH_SERVICE_URL: http://auth-service:8001
+      PAYMENT_SERVICE_URL: http://payment-service:8003
+      SERVICE_PORT: 8005
+    depends_on:
+      - postgres
+      - redis
+      - auth-service
+      - payment-service
+
+  # Module F: Reporting Service
+  reporting-service:
+    build: ./reporting-analytics-service
+    ports:
+      - "8006:8006"
+    environment:
+      DATABASE_URL: postgresql://finflow:finflow123@postgres:5432/reporting_db
+      REDIS_HOST: redis
+      AUTH_SERVICE_URL: http://auth-service:8001
+      WALLET_SERVICE_URL: http://wallet-service:8002
+      PAYMENT_SERVICE_URL: http://payment-service:8003
+      KYC_SERVICE_URL: http://kyc-service:8005
+      SERVICE_PORT: 8006
+    depends_on:
+      - postgres
+      - redis
+      - auth-service
+      - wallet-service
+      - payment-service
+      - kyc-service
+
+  # Monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    depends_on:
+      - prometheus
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    ports:
+      - "16686:16686"
+      - "6831:6831/udp"
+
+volumes:
+  postgres_data:
+  mongo_data:
+
+networks:
+  default:
+    name: finflow-network
