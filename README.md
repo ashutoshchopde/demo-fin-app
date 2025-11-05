@@ -286,10 +286,9 @@ curl -X POST http://localhost:8003/api/payment/transfer \\
   }'
 
 # 2. Freeze wallet
-curl -X PUT http://localhost:8002/api/wallet/1/status \\
+curl -X PUT http://localhost:8002/api/wallet/1/status?new_status=frozen \\
   -H "Authorization: Bearer $TOKEN" \\
   -H "Content-Type: application/json" \\
-  -d '"frozen"'
 
 # 3. Try payment again (WILL FAIL - wallet frozen)
 curl -X POST http://localhost:8003/api/payment/transfer \\

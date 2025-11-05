@@ -1,0 +1,17 @@
+# Minimal Prometheus configuration
+# Scrapes Prometheus itself by default. Adjust or add jobs to scrape your services.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+#scrape_configs:
+#  - job_name: 'prometheus'
+#    static_configs:
+#      - targets: ['localhost:9090']
+
+# Example: scrape services running on the Docker Compose network.
+# Uncomment and update the targets to match service names/ports in docker-compose.
+#  - job_name: 'app-services'
+#    static_configs:
+#      - targets: ['auth-service:8001','wallet-service:8002','payment-service:8003']

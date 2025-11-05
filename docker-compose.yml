@@ -1,4 +1,4 @@
-version: '3.12'
+
 
 services:
   # Infrastructure Services
@@ -10,8 +10,14 @@ services:
       POSTGRES_DB: finflow
     ports:
       - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./init-db:/docker-entrypoint-initdb.d
 
   mongodb:
     image: mongo:6
@@ -24,9 +30,14 @@ services:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   kafka:
-    image: confluentinc/cp-kafka:latest
+    image: confluentinc/cp-kafka:7.4.1
     environment:
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
@@ -37,7 +48,7 @@ services:
       - zookeeper
 
   zookeeper:
-    image: confluentinc/cp-zookeeper:latest
+    image: confluentinc/cp-zookeeper:7.4.1
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
     ports:
@@ -53,8 +64,10 @@ services:
       REDIS_HOST: redis
       SERVICE_PORT: 8001
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   # Module B: Wallet Service
   wallet-service:
