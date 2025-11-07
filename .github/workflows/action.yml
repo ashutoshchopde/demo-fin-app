@@ -32,6 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: api-check
     if: ${{needs.api-check.outputs.continue-next == 'true'}}
+    environment: mac
     steps:
       - name: Run next job
         run: echo "Value is less than 50. Running next job..."
