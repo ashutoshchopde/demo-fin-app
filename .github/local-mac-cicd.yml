@@ -1,0 +1,74 @@
+name: Local CI/CD for Mac
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1️⃣ Checkout the code
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2️⃣ Set up Docker Buildx (for multi-platform build support)
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # 3️⃣ Build all service images to validate they work
+      - name: Build Docker images using docker-compose
+        run: |
+          docker compose build
+
+      # 4️⃣ (Optional) Run tests if your services have them
+      - name: Run tests (if defined)
+        run: |
+          echo "Running service tests..."
+          # Example: pytest, npm test, etc.
+          # cd auth-service && pytest
+          # cd wallet-service && npm test
+
+      # 5️⃣ Set up SSH agent to connect to your Mac
+      - name: Configure SSH access
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      # 6️⃣ Deploy to your local Mac
+      - name: Deploy to Local Mac (via SSH)
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
+            set -e
+            echo "🚀 Deploying demo-fin-app on Mac..."
+
+            # Move to your local repo path on Mac
+            cd /Users/${{ secrets.SSH_USER }}/Projects/demo-fin-app
+
+            echo "📦 Pulling latest changes..."
+            git fetch origin main
+            git reset --hard origin/main
+
+            echo "🧹 Stopping old containers..."
+            docker compose down || true
+
+            echo "🔨 Rebuilding and starting services..."
+            docker compose build --no-cache
+            docker compose up -d
+
+            echo "✅ Deployment completed on Mac!"
+          EOF
+
+      # 7️⃣ Verify that key services are running
+      - name: Verify running containers
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
+            echo "🔍 Checking running containers..."
+            docker ps
+
+            echo "🔎 Checking basic health endpoints..."
+            curl -f http://localhost:8001/health || echo "Auth Service not responding"
+            curl -f http://localhost:8002/health || echo "Wallet Service not responding"
+          EOF
+
