@@ -1,15 +1,41 @@
-name: Local CI/CD for Mac
+name: Local CI/CD 
 
 on:
   push:
     branches: [ main ]
-  pull:
+  pull_request:
     branches: [ main ]
 jobs:
+  api-check:
+    runs-on: ubuntu-latest
+    outputs:
+      continue-next: ${{ env.continue-next }}
+    steps:
+      - name: Call API
+        id: call-api
+        run: |
+          echo "Calling API..."
+          response=$(curl -s https://mocki.io/v1/4c03c4c1-4488-4766-9a15-9f9c629cfaf6)
+          echo "Response: $response"
+          echo "$response" > response.json
+          # extract value from JSON
+          value=$(echo $response | jq '.value')
+          echo "Value from API: $value"
+          if [ "$value" -lt 50 ]; then
+            echo "continue-next=true" >> $GITHUB_ENV
+          else
+            echo "continue-next=false" >> $GITHUB_ENV
+          fi
+        shell: bash
+        
   build-and-deploy:
     runs-on: ubuntu-latest
-
+    needs: api-check
+    if: ${{needs.api-check.outputs.continue-next == 'true'}}
+    environment: mac
     steps:
+      - name: Run next job
+        run: echo "Value is less than 50. Running next job..."
       # 1️⃣ Checkout the code
       - name: Checkout repository
         uses: actions/checkout@v4
